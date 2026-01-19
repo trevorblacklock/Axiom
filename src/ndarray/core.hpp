@@ -1,0 +1,335 @@
+#ifndef NDARRAY_CORE_H_DEFINED
+#define NDARRAY_CORE_H_DEFINED
+
+#include <concepts>
+#include <cstdlib>
+#include <initializer_list>
+#include <memory>
+#include <vector>
+
+#include "broadcast.hpp"
+#include "../core.hpp"
+#include "extents.hpp"
+#include "iterator.hpp"
+
+namespace ax {
+
+namespace detail {
+
+template<class T_, std::size_t N_>
+struct nested_init_list_impl {
+    using subtype = typename nested_init_list_impl<T_, N_ - 1>::type;
+    using type = std::initializer_list<subtype>;
+};
+
+template<class T_>
+struct nested_init_list_impl<T_, 1> {
+    using subtype = T_;
+    using type = std::initializer_list<T_>;
+};
+
+template<class Tp_, std::size_t N_>
+using nested_init_list = typename detail::nested_init_list_impl<Tp_, N_>::type;
+
+template<class T_, std::size_t N_>
+inline void data_from_nested_init_list_impl(
+        const nested_init_list<T_, N_>& list, T_* ptr, 
+        const std::vector<std::size_t>& shape,
+        std::size_t& idx) {
+    ax_assert(shape[shape.size() - N_] == list.size(),
+            "Cannot represent non-rectangular data as ndarray!");
+    for (const auto& x : list) {
+        if constexpr (N_ == 1) ptr[idx++] = x;
+        else data_from_nested_init_list_impl<T_, N_ - 1>(x, ptr, shape, idx);
+    }
+}
+
+template<class T_, std::size_t N_>
+inline void shape_from_nested_init_list_impl(
+        const nested_init_list<T_, N_>& list,
+        std::vector<std::size_t>& shape,
+        std::size_t& size) {
+    size *= list.size();
+    shape.push_back(list.size());
+    if constexpr (N_ >= 2) 
+        shape_from_nested_init_list_impl<T_, N_ - 1>(*list.begin(), shape, size);
+}
+
+template<class T_, std::size_t N_>
+inline void data_from_nested_init_list(
+        const nested_init_list<T_, N_>& list, T_* ptr,
+        const std::vector<std::size_t>& shape) {
+    ax_assert(ptr != nullptr, "Trying to fill unallocated pointer");
+    std::size_t idx = 0;
+    detail::data_from_nested_init_list_impl<T_, N_>(list, ptr, shape, idx);
+}
+
+template<class T_, std::size_t N_>
+inline void shape_from_nested_init_list(
+        const nested_init_list<T_, N_>& list,
+        std::vector<std::size_t>& shape,
+        std::size_t& size) {
+    size = 1; // Size has to be 1 when recursively multiplying
+    detail::shape_from_nested_init_list_impl<T_, N_>(list, shape, size);
+}
+
+template<std::integral It_, std::integral... Its_>
+inline void verify_indices(const std::size_t* shape, It_ idx, Its_... idxs) {
+    ax_assert(static_cast<std::size_t>(idx) < *shape, "Index out of bounds!");
+    if constexpr (sizeof...(Its_) > 0) verify_indices(++shape, idxs...);
+}
+
+constexpr void transpose_helper(
+    const std::size_t* old_shape, 
+    const std::size_t* old_strides,
+    std::size_t* new_shape, 
+    std::size_t* new_strides,
+    std::size_t idx,
+    const std::vector<std::size_t>& axes) {
+    for (const auto& axis : axes) {
+        new_shape[idx] = old_shape[axis];
+        new_strides[idx++] = old_strides[axis];
+    }
+}
+
+} // namespace detail
+
+template<class Tp_>
+class ndarray {
+public:
+    using data_type = std::remove_cv_t<Tp_>;
+    using extent_type = ndarray_extents;
+
+    constexpr auto extent(std::size_t rank = 0) const { 
+        return extents_->extent(rank); 
+    }
+
+    constexpr auto size() const noexcept { 
+        return extents_->size(); 
+    }
+
+    constexpr auto rank() const noexcept {
+        return extents_->rank();
+    }
+
+    constexpr auto& accessor() const noexcept {
+        return data_;
+    }
+
+    constexpr auto data() const noexcept {
+        return data_.get();
+    }
+
+    constexpr auto& extents() const noexcept {
+        return *extents_;
+    }
+
+    constexpr auto begin() {
+        return ndarray_iterator(this, 0);
+    }
+
+    constexpr auto begin() const {
+        return ndarray_iterator(this, 0);
+    }
+
+    constexpr auto end() {
+        return ndarray_iterator(this, extent());
+    }
+
+    constexpr auto end() const {
+        return ndarray_iterator(this, extent());
+    }
+
+    template<class Fn_>
+    requires (std::invocable<Fn_, data_type>)
+    constexpr auto apply(Fn_&& func) const {
+        using new_dt = std::invoke_result_t<Fn_, data_type>;
+        auto array = ndarray<new_dt>(new_dt{}, this->extents_->shape());
+        auto new_data = array.data();
+        auto old_data = this->data();
+        for (std::size_t i = 0; i < array.size(); ++i)
+            new_data[i] = func(old_data[i]);
+        return array;
+    }
+
+    constexpr auto reshape(const std::vector<std::size_t>& shape) const {
+        ax_assert(product(shape) == size(),
+            "New shape does not match size of data!");
+        if (extents_->contiguous()) return ndarray(data_, shape);
+
+        auto& strides = extents_->strides();
+        ndarray<data_type> array(data_type{}, shape);
+        std::vector<std::size_t> index(this->rank());
+
+        auto new_ptr = array.data();
+        auto old_ptr = this->data();
+
+        for (std::size_t i = 0; i < this->size(); ++i) {
+            // Map 1d index to nd
+            auto k = i;
+            for (std::size_t j = 0; j < this->rank(); ++j) {
+                auto idx = this->rank() - j - 1;
+                if (k == 0) {
+                    index[idx] = 0;
+                    break;
+                }
+                else {
+                    index[idx] = k / strides[idx];
+                    k %= strides[idx];
+                }      
+            }
+            new_ptr[i] = old_ptr[this->extents_->index(index)];
+        }
+        return array;
+    }
+
+    constexpr auto flatten() const {
+        return reshape({size()});
+    }
+
+    constexpr auto transpose(const std::vector<std::size_t>& axes) const {
+        ax_assert(rank() >= 2, "Cannot transpose array less than rank 2!");
+        ax_assert(axes.size() == rank(),
+            "Number of axes does not match rank of array!");
+        for (auto& x : axes) ax_assert(x < rank(),
+            "Axis cannot exceed rank of array!");
+        auto old_shape = extents_->shape().data();
+        auto old_strides = extents_->strides().data();
+        auto new_shape = std::vector<std::size_t>(rank());
+        auto new_strides = std::vector<std::size_t>(rank());
+        detail::transpose_helper(old_shape, old_strides, 
+            new_shape.data(), new_strides.data(), 0, axes);
+        auto new_extents = extent_type(new_shape, new_strides, size());
+        auto array = ndarray(data_, new_extents);
+        array.extents().contiguous() = false;
+        return array;
+    }
+
+    constexpr auto transpose() const {
+        ax_assert(rank() >= 2, "Cannot transpose array less than rank 2!");
+        auto idx = rank();
+        auto shape = extents_->shape();
+        auto strides = extents_->strides();
+        std::swap(shape[idx - 1], shape[idx - 2]);
+        std::swap(strides[idx - 1], strides[idx - 2]);
+        auto new_extents = extent_type(shape, strides, size());
+        auto array = ndarray(data_, new_extents);
+        array.extents().contiguous() = false;
+        return array;
+    }
+
+    template<std::integral... Its_>
+    requires (sizeof...(Its_) >= 1)
+    constexpr auto view(Its_... idxs) const {
+        auto flat_idx = extents_->index(idxs...);
+        auto data_ptr = std::shared_ptr<data_type[]>(data_, &data_[flat_idx]);
+        auto& old_shape = extents_->shape();
+        auto& old_strides = extents_->strides();
+        auto new_shape = std::vector(
+            old_shape.begin() + sizeof...(Its_), 
+            old_shape.end());
+        auto new_strides = std::vector(
+            old_strides.begin() + sizeof...(Its_),
+            old_strides.end());
+        auto new_extents = extent_type(new_shape, 
+            new_strides, product(new_shape));
+        return ndarray(data_ptr, new_extents);
+    }
+
+    ndarray() = default;
+
+    // Copy constructor must support casting to abled types
+    template<class Tps_>
+    requires (std::is_convertible<Tp_, Tps_>::value)
+    ndarray(const ndarray<Tps_>& other) { *this = other; }
+
+    ndarray(ndarray<Tp_>&& other) noexcept { *this = std::move(other); }
+
+    template<std::integral... Sz_>
+    explicit ndarray(Sz_... shape) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[(1 * ... * shape)])),
+        extents_(std::make_unique<extent_type>(shape...)) {}
+
+    explicit ndarray(Tp_* ptr, const std::vector<std::size_t>& shape) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
+        extents_(std::make_unique<extent_type>(shape)) {
+        std::copy(ptr, ptr + extents_->size(), data_.get());
+    }
+
+    explicit ndarray(const std::vector<std::size_t>& shape) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
+        extents_(std::make_unique<extent_type>(shape)) {}
+
+    explicit ndarray(Tp_ value, const std::vector<std::size_t>& shape) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
+        extents_(std::make_unique<extent_type>(shape)) { 
+        std::fill(data_.get(), data_.get() + size(), value); 
+    }
+
+    template<std::size_t N_>
+    using Nl_ = detail::nested_init_list<data_type, N_>;
+
+    ndarray(const Nl_<1>& data) { init_from_nl<1>(data); }
+    ndarray(const Nl_<2>& data) { init_from_nl<2>(data); }
+    ndarray(const Nl_<3>& data) { init_from_nl<3>(data); }
+    ndarray(const Nl_<4>& data) { init_from_nl<4>(data); }
+    ndarray(const Nl_<5>& data) { init_from_nl<5>(data); }
+
+    template<std::integral... Its_>
+    requires (sizeof...(Its_) >= 1)
+    constexpr auto& operator[](Its_... idxs) const {
+        ax_assert(sizeof...(Its_) == rank(),
+            "Incorrect number of indices!");
+        detail::verify_indices(extents_->shape().data(), idxs...);
+        auto flat_idx = extents_->index(idxs...);
+        return data_[flat_idx];
+    }
+
+    template<class Tps_>
+    requires (std::is_convertible_v<Tp_, Tps_>)
+    constexpr auto& operator=(const ndarray<Tps_>& other) {
+        auto size = other.size();
+        extents_ = std::make_unique<extent_type>(other.extents());
+        data_ = std::shared_ptr<Tp_[]>(new Tp_[size]);
+        std::copy(static_cast<Tps_*>(other.data()), 
+            static_cast<Tps_*>(other.data()) + size, data_.get());
+        return *this;
+    }
+    
+    constexpr auto& operator=(ndarray<data_type>&& other) noexcept {
+        extents_ = std::make_unique<extent_type>(other.extents());
+        data_ = other.accessor();
+        return *this;
+    }
+
+private:
+    std::shared_ptr<data_type[]> data_;
+    std::unique_ptr<extent_type> extents_;
+
+    template<std::size_t N_>
+    constexpr void init_from_nl(const Nl_<N_>& data) {
+        std::vector<std::size_t> shape; std::size_t size;
+        detail::shape_from_nested_init_list<data_type, N_>(
+            data, shape, size);
+        data_ = std::shared_ptr<Tp_[]>(new Tp_[size]);
+        extents_ = std::make_unique<extent_type>(shape, size);
+        detail::data_from_nested_init_list<data_type, N_>(
+            data, data_.get(), shape);
+    }
+
+    explicit ndarray(const extent_type& extents) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])),
+        extents_(std::make_unique<extent_type>(extents)) {}
+
+    explicit ndarray(const std::shared_ptr<data_type[]>& data_ptr,
+        const std::vector<std::size_t>& shape) : 
+        data_(data_ptr), extents_(std::make_unique<extent_type>(shape)) {}
+
+    explicit ndarray(const std::shared_ptr<data_type[]>& data_ptr,
+        const extent_type& extents) : 
+        data_(data_ptr), extents_(std::make_unique<extent_type>(extents)) {}
+};
+
+} // namespace ax
+
+#endif /* NDARRAY_CORE_H_DEFINED */
