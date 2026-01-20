@@ -3,3 +3,5 @@ CompileFlags:
     - std=c++23
     - Wall
     - Wextra
+Diagnostics:
+  UnusedIncludes: None
