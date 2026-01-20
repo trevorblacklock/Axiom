@@ -124,6 +124,14 @@ public:
         return *extents_;
     }
 
+    constexpr auto stride_type() const noexcept {
+        return extents_->stride_type();
+    }
+
+    constexpr auto is_unique() const noexcept {
+        return data_.unique();
+    }
+
     constexpr auto begin() {
         return ndarray_iterator(this, 0);
     }
@@ -155,8 +163,8 @@ public:
     constexpr auto reshape(const std::vector<std::size_t>& shape) const {
         ax_assert(product(shape) == size(),
             "New shape does not match size of data!");
-        if (extents_->contiguous()) return ndarray(data_, shape);
-
+        if (stride_type() != stride_type::RANDOM) return ndarray(data_, shape);
+        // TODO: REDO THIS!!!
         auto& strides = extents_->strides();
         ndarray<data_type> array(data_type{}, shape);
         std::vector<std::size_t> index(this->rank());
@@ -199,9 +207,9 @@ public:
         auto new_strides = std::vector<std::size_t>(rank());
         detail::transpose_helper(old_shape, old_strides, 
             new_shape.data(), new_strides.data(), 0, axes);
-        auto new_extents = extent_type(new_shape, new_strides, size());
+        auto new_extents = extent_type(new_shape, new_strides, 
+            size(), stride_type::RANDOM);
         auto array = ndarray(data_, new_extents);
-        array.extents().contiguous() = false;
         return array;
     }
 
@@ -212,9 +220,9 @@ public:
         auto strides = extents_->strides();
         std::swap(shape[idx - 1], shape[idx - 2]);
         std::swap(strides[idx - 1], strides[idx - 2]);
-        auto new_extents = extent_type(shape, strides, size());
+        auto new_extents = extent_type(shape, strides, 
+            size(), stride_type::RANDOM);
         auto array = ndarray(data_, new_extents);
-        array.extents().contiguous() = false;
         return array;
     }
 
@@ -232,7 +240,7 @@ public:
             old_strides.begin() + sizeof...(Its_),
             old_strides.end());
         auto new_extents = extent_type(new_shape, 
-            new_strides, product(new_shape));
+            new_strides, product(new_shape), stride_type());
         return ndarray(data_ptr, new_extents);
     }
 
@@ -265,6 +273,10 @@ public:
         extents_(std::make_unique<extent_type>(shape)) { 
         std::fill(data_.get(), data_.get() + size(), value); 
     }
+
+    explicit ndarray(const extent_type& extents) :
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])),
+        extents_(std::make_unique<extent_type>(extents)) {}
 
     template<std::size_t N_>
     using Nl_ = detail::nested_init_list<data_type, N_>;
@@ -316,10 +328,6 @@ private:
         detail::data_from_nested_init_list<data_type, N_>(
             data, data_.get(), shape);
     }
-
-    explicit ndarray(const extent_type& extents) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])),
-        extents_(std::make_unique<extent_type>(extents)) {}
 
     explicit ndarray(const std::shared_ptr<data_type[]>& data_ptr,
         const std::vector<std::size_t>& shape) : 

@@ -8,6 +8,12 @@
 
 namespace ax {
 
+enum class stride_type : int {
+    ROW_MAJOR,
+    COLUMN_MAJOR,
+    RANDOM
+};
+
 namespace detail {
 
 constexpr auto flat_index(
@@ -55,8 +61,12 @@ public:
         return strides_;
     }
 
-    constexpr auto& contiguous() noexcept {
-        return contiguous_;
+    constexpr void set_stride_type(stride_type type) noexcept {
+        stride_type_ = type;
+    }
+
+    constexpr auto stride_type() const noexcept {
+        return stride_type_;
     }
 
     template<std::integral... Its_>
@@ -87,13 +97,15 @@ public:
     ndarray_extents(
         const std::vector<std::size_t>& shape,
         const std::vector<std::size_t>& strides,
-        std::size_t size) :
-        shape_(shape), strides_(strides), size_(size) {}
+        std::size_t size, enum stride_type stride_type) :
+        shape_(shape), strides_(strides), 
+        size_(size), stride_type_(stride_type) {}
 
     constexpr auto& operator=(const ndarray_extents& other) {
         shape_ = other.shape();
         strides_ = other.strides();
         size_ = other.size();
+        stride_type_ = other.stride_type();
         return *this;
     }
 
@@ -111,8 +123,7 @@ private:
     std::vector<std::size_t> shape_;
     std::vector<std::size_t> strides_;
     std::size_t size_;
-
-    bool contiguous_ = true;
+    enum stride_type stride_type_ = stride_type::ROW_MAJOR;
 
     constexpr void update_strides() {
         std::exclusive_scan(shape_.rbegin(), shape_.rend(), 
