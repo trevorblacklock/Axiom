@@ -136,6 +136,10 @@ public:
         return extents_->shape();
     }
 
+    constexpr auto& strides() const noexcept {
+        return extents_->strides();
+    }
+
     constexpr void fill(Tp_ value) {
         std::fill(data_.get(), data_.get() + size(), value);
     }
@@ -352,49 +356,49 @@ public:
     }
 
     template<class Tp2_>
-    constexpr auto operator+=(const ndarray<Tp2_>& arr) {
+    constexpr auto& operator+=(const ndarray<Tp2_>& arr) {
         broadcast_self(*this, arr, std::plus());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator+=(Tp2_ scalar) {
+    constexpr auto& operator+=(Tp2_ scalar) {
         broadcast_scalar_self(scalar, *this, std::plus());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator-=(const ndarray<Tp2_>& arr) {
+    constexpr auto& operator-=(const ndarray<Tp2_>& arr) {
         broadcast_self(*this, arr, std::minus());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator-=(Tp2_ scalar) {
+    constexpr auto& operator-=(Tp2_ scalar) {
         broadcast_scalar_self(scalar, *this, std::minus());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator*=(const ndarray<Tp2_>& arr) {
+    constexpr auto& operator*=(const ndarray<Tp2_>& arr) {
         broadcast_self(*this, arr, std::multiplies());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator*=(Tp2_ scalar) {
+    constexpr auto& operator*=(Tp2_ scalar) {
         broadcast_scalar_self(scalar, *this, std::multiplies());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator/=(const ndarray<Tp2_>& arr) {
+    constexpr auto& operator/=(const ndarray<Tp2_>& arr) {
         broadcast_self(*this, arr, std::divides());
         return *this;
     }
 
     template<class Tp2_>
-    constexpr auto operator/=(Tp2_ scalar) {
+    constexpr auto& operator/=(Tp2_ scalar) {
         broadcast_scalar_self(scalar, *this, std::divides());
         return *this;
     }

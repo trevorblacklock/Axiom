@@ -110,6 +110,81 @@ constexpr void broadcast_apply_scalar(
     }
 }
 
+template<
+    class Tp1_,
+    class Tp2_,
+    class Fn_,
+    class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
+constexpr void broadcast_helper(
+    const ndarray<Tp1_>& arr1,
+    const ndarray<Tp2_>& arr2,
+    ndarray<Tp3_>& arr3,
+    Fn_&& func) {
+    
+    const auto& shape3 = arr3.shape();
+    const auto& strides1 = arr1.strides();
+    const auto& strides2 = arr2.strides();
+
+    auto rank1 = arr1.rank();
+    auto rank2 = arr2.rank();
+    auto [rmax, rmin] = std::minmax(rank1, rank2);
+
+    if (arr1.is_contiguous() && arr2.is_contiguous()) {
+        if (arr1.size() == arr2.size()) {
+            detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
+                arr3.data(), func, arr1.size());
+        } 
+        else {
+            auto stride_idx = rmax - rmin - 1;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data() + i, 
+                        arr2.data(), arr3.data() + i, func, arr2.size());
+                }          
+            }
+            else {
+                auto stride = strides2[stride_idx];
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data(),
+                        arr2.data() + i, arr3.data() + i, func, arr1.size());
+                }
+            }
+        }
+    }
+    else {
+        std::size_t idx = 0;
+        if (arr1.size() == arr2.size()) {
+            detail::broadcast_apply_general(arr1.data(), arr2.data(), 
+                arr3.data(), func, shape3.data(), strides1.data(), 
+                strides2.data(), arr3.rank(), idx);
+        }
+        else {  
+            auto rdiff = rmax - rmin;
+            auto stride_idx = rdiff - 1;
+            auto offset_shape = shape3.data() + rdiff;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                auto offset_strides = strides1.data() + rdiff;
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data() + i,
+                        arr2.data(), arr3.data(), func, offset_shape,
+                        offset_strides, strides2.data(), arr2.rank(), idx);
+                }
+            }
+            else {
+                auto stride = strides2[stride_idx];
+                auto offset_strides = strides2.data() + rdiff;
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data(), 
+                    arr2.data() + i, arr3.data(), func, offset_shape,
+                        strides1.data(), offset_strides, arr1.rank(), idx);
+                }
+            }
+        }
+    }
+}
+
 } // namespace detail
 
 template<
@@ -148,7 +223,7 @@ template<
     class Fn_>
 requires (std::invocable<Fn_, Tp1_, Tp1_>)
 constexpr void broadcast_self(
-    const ndarray<Tp1_>& arr1,
+    ndarray<Tp1_>& arr1,
     const ndarray<Tp1_>& arr2,
     Fn_&& func) {
     // Check for scalar operations
@@ -157,8 +232,6 @@ constexpr void broadcast_self(
 
     auto& shape1 = arr1.shape();
     auto& shape2 = arr2.shape();
-    auto& strides1 = arr1.extents().strides();
-    auto& strides2 = arr2.extents().strides();
     
     auto rank1 = arr1.rank();
     auto rank2 = arr2.rank();
@@ -171,60 +244,7 @@ constexpr void broadcast_self(
             "Cannot broadcast arrays of incompatible shape!");
     }
 
-    if (arr1.is_contiguous() && arr2.is_contiguous()) {
-        if (arr1.size() == arr2.size()) {
-            detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
-                arr1.data(), func, arr1.size());
-        } 
-        else {
-            auto stride_idx = rmax - rmin - 1;
-            if (rank1 > rank2) {
-                auto stride = strides1[stride_idx];
-                for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(arr1.data() + i, 
-                        arr2.data(), arr1.data() + i, func, arr2.size());
-                }          
-            }
-            else {
-                auto stride = strides2[stride_idx];
-                for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(arr1.data(),
-                        arr2.data() + i, arr1.data() + i, func, arr1.size());
-                }
-            }
-        }
-    }
-    else {
-        std::size_t idx3 = 0;
-        if (arr1.size() == arr2.size()) {
-            detail::broadcast_apply_general(arr1.data(), arr2.data(), 
-                arr1.data(), func, shape1.data(), strides1.data(), 
-                strides2.data(), arr1.rank(), idx3);
-        }
-        else {  
-            auto rdiff = rmax - rmin;
-            auto stride_idx = rdiff - 1;
-            auto offset_shape = shape1.data() + rdiff;
-            if (rank1 > rank2) {
-                auto stride = strides1[stride_idx];
-                auto offset_strides = strides1.data() + rdiff;
-                for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                    detail::broadcast_apply_general(arr1.data() + i,
-                        arr2.data(), arr1.data(), func, offset_shape,
-                        offset_strides, strides2.data(), arr2.rank(), idx3);
-                }
-            }
-            else {
-                auto stride = strides2[stride_idx];
-                auto offset_strides = strides2.data() + rdiff;
-                for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                    detail::broadcast_apply_general(arr1.data(), 
-                    arr2.data() + i, arr1.data(), func, offset_shape,
-                        strides1.data(), offset_strides, arr1.rank(), idx3);
-                }
-            }
-        }
-    }
+    detail::broadcast_helper(arr1, arr2, arr1, func);
 }
 
 template<
@@ -247,12 +267,8 @@ constexpr auto broadcast(
     auto rank2 = arr2.rank();
     auto [rmin, rmax] = std::minmax(rank1, rank2);
 
-    auto& extents1 = arr1.extents();
-    auto& extents2 = arr2.extents();
-    auto& shape1 = extents1.shape();
-    auto& shape2 = extents2.shape();
-    auto& strides1 = extents1.strides();
-    auto& strides2 = extents2.strides();
+    auto& shape1 = arr1.shape();
+    auto& shape2 = arr2.shape();
 
     std::vector<std::size_t> shape3(rmax);
     for (std::size_t i = 0; i < rmax - rmin; ++i) {
@@ -268,62 +284,9 @@ constexpr auto broadcast(
         *(ptr--) = std::max(x1, x2);
     }
 
-    std::size_t idx3 = 0;
-    auto arr3 = ndarray<Tp3_>(shape3);
-
-    if (arr1.is_contiguous() && arr2.is_contiguous()) {
-        if (arr1.size() == arr2.size()) {
-            detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
-                arr3.data(), func, arr1.size());
-        } 
-        else {
-            auto stride_idx = rmax - rmin - 1;
-            if (rank1 > rank2) {
-                auto stride = strides1[stride_idx];
-                for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(arr1.data() + i, 
-                        arr2.data(), arr3.data() + i, func, arr2.size());
-                }          
-            }
-            else {
-                auto stride = strides2[stride_idx];
-                for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(arr1.data(),
-                        arr2.data() + i, arr3.data() + i, func, arr1.size());
-                }
-            }
-        }
-    }
-    else {
-        if (arr1.size() == arr2.size()) {
-            detail::broadcast_apply_general(arr1.data(), arr2.data(), 
-                arr3.data(), func, shape1.data(), strides1.data(), 
-                strides2.data(), arr3.rank(), idx3);
-        }
-        else {  
-            auto rdiff = rmax - rmin;
-            auto stride_idx = rdiff - 1;
-            auto offset_shape = shape3.data() + rdiff;
-            if (rank1 > rank2) {
-                auto stride = strides1[stride_idx];
-                auto offset_strides = strides1.data() + rdiff;
-                for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                    detail::broadcast_apply_general(arr1.data() + i,
-                        arr2.data(), arr3.data(), func, offset_shape,
-                        offset_strides, strides2.data(), arr2.rank(), idx3);
-                }
-            }
-            else {
-                auto stride = strides2[stride_idx];
-                auto offset_strides = strides2.data() + rdiff;
-                for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                    detail::broadcast_apply_general(arr1.data(), 
-                    arr2.data() + i, arr3.data(), func, offset_shape,
-                        strides1.data(), offset_strides, arr1.rank(), idx3);
-                }
-            }
-        }
-    }
+    ndarray<Tp3_> arr3(shape3);
+    detail::broadcast_helper(arr1, arr2, arr3, func);
+    
     return arr3;
 }
 
