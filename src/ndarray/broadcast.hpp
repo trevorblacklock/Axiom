@@ -4,8 +4,6 @@
 #include "../core.hpp"
 #include "extents.hpp"
 
-#include <print>
-
 #include <algorithm>
 #include <type_traits>
 #include <vector>
@@ -17,6 +15,7 @@ class ndarray;
 
 namespace detail {
 
+// TODO: FIX THIS!!
 constexpr auto is_similar_strides(
     const std::vector<std::size_t>& strides1,
     const std::vector<std::size_t>& strides2) {
@@ -153,8 +152,7 @@ constexpr auto broadcast(
     std::size_t idx3 = 0;
     auto arr3 = ndarray<Tp3_>(shape3);
 
-    if (arr1.stride_type() != stride_type::RANDOM && 
-        arr1.stride_type() == arr2.stride_type()) {
+    if (arr1.is_contiguous() && arr2.is_contiguous()) {
         if (arr1.size() == arr2.size()) {
             detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
                 arr3.data(), func, arr1.size());

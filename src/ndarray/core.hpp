@@ -98,7 +98,7 @@ template<class Tp_>
 class ndarray {
 public:
     using data_type = std::remove_cv_t<Tp_>;
-    using extent_type = ndarray_extents;
+    using extent_type = ndarray_extents<stride_type::row_major>;
 
     constexpr auto extent(std::size_t rank = 0) const { 
         return extents_->extent(rank); 
@@ -124,8 +124,8 @@ public:
         return *extents_;
     }
 
-    constexpr auto stride_type() const noexcept {
-        return extents_->stride_type();
+    constexpr auto is_contiguous() const noexcept {
+        return extents_->is_contiguous();
     }
 
     constexpr auto is_unique() const noexcept {
@@ -163,7 +163,7 @@ public:
     constexpr auto reshape(const std::vector<std::size_t>& shape) const {
         ax_assert(product(shape) == size(),
             "New shape does not match size of data!");
-        if (stride_type() != stride_type::RANDOM) return ndarray(data_, shape);
+        if (is_contiguous()) return ndarray(data_, shape);
         // TODO: REDO THIS!!!
         auto& strides = extents_->strides();
         ndarray<data_type> array(data_type{}, shape);
@@ -192,7 +192,7 @@ public:
     }
 
     constexpr auto flatten() const {
-        return reshape({size()});
+        return reshape({ size() });
     }
 
     constexpr auto transpose(const std::vector<std::size_t>& axes) const {
@@ -208,7 +208,7 @@ public:
         detail::transpose_helper(old_shape, old_strides, 
             new_shape.data(), new_strides.data(), 0, axes);
         auto new_extents = extent_type(new_shape, new_strides, 
-            size(), stride_type::RANDOM);
+            size(), false);
         auto array = ndarray(data_, new_extents);
         return array;
     }
@@ -221,7 +221,7 @@ public:
         std::swap(shape[idx - 1], shape[idx - 2]);
         std::swap(strides[idx - 1], strides[idx - 2]);
         auto new_extents = extent_type(shape, strides, 
-            size(), stride_type::RANDOM);
+            size(), false);
         auto array = ndarray(data_, new_extents);
         return array;
     }
@@ -240,7 +240,7 @@ public:
             old_strides.begin() + sizeof...(Its_),
             old_strides.end());
         auto new_extents = extent_type(new_shape, 
-            new_strides, product(new_shape), stride_type());
+            new_strides, product(new_shape), is_contiguous());
         return ndarray(data_ptr, new_extents);
     }
 

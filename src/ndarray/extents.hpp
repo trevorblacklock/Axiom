@@ -9,9 +9,8 @@
 namespace ax {
 
 enum class stride_type : int {
-    ROW_MAJOR,
-    COLUMN_MAJOR,
-    RANDOM
+    row_major,
+    column_major
 };
 
 namespace detail {
@@ -39,8 +38,11 @@ constexpr auto flat_index(
 
 } // namespace detail
 
+template<stride_type St_ = stride_type::row_major>
 class ndarray_extents {
 public:
+    static constexpr auto stride_type = St_;
+    
     constexpr auto extent(std::size_t rank = 0) const {
         return shape_.at(rank);
     }
@@ -61,12 +63,12 @@ public:
         return strides_;
     }
 
-    constexpr void set_stride_type(stride_type type) noexcept {
-        stride_type_ = type;
+    constexpr void set_conguitity(bool contiguity) noexcept {
+        contiguity_ = contiguity;
     }
 
-    constexpr auto stride_type() const noexcept {
-        return stride_type_;
+    constexpr auto is_contiguous() const noexcept {
+        return contiguity_;
     }
 
     template<std::integral... Its_>
@@ -97,15 +99,15 @@ public:
     ndarray_extents(
         const std::vector<std::size_t>& shape,
         const std::vector<std::size_t>& strides,
-        std::size_t size, enum stride_type stride_type) :
+        std::size_t size, bool contiguity = true) :
         shape_(shape), strides_(strides), 
-        size_(size), stride_type_(stride_type) {}
+        size_(size), contiguity_(contiguity) {}
 
     constexpr auto& operator=(const ndarray_extents& other) {
         shape_ = other.shape();
         strides_ = other.strides();
         size_ = other.size();
-        stride_type_ = other.stride_type();
+        contiguity_ = other.is_contiguous();
         return *this;
     }
 
@@ -123,7 +125,7 @@ private:
     std::vector<std::size_t> shape_;
     std::vector<std::size_t> strides_;
     std::size_t size_;
-    enum stride_type stride_type_ = stride_type::ROW_MAJOR;
+    bool contiguity_ = true;
 
     constexpr void update_strides() {
         std::exclusive_scan(shape_.rbegin(), shape_.rend(), 
