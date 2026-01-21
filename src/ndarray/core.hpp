@@ -300,6 +300,46 @@ public:
         return *this;
     }
 
+    template<class Tp2_>
+    constexpr auto operator+(const ndarray<Tp2_>& arr) {
+        return broadcast(*this, arr, std::plus());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator+(Tp2_ scalar) {
+        return broadcast_scalar<false>(scalar, *this, std::plus());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator-(const ndarray<Tp2_>& arr) {
+        return broadcast(*this, arr, std::minus());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator-(Tp2_ scalar) {
+        return broadcast_scalar<false>(scalar, *this, std::minus());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator*(const ndarray<Tp2_>& arr) {
+        return broadcast(*this, arr, std::multiplies());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator*(Tp2_ scalar) {
+        return broadcast_scalar<false>(scalar, *this, std::multiplies());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator/(const ndarray<Tp2_>& arr) {
+        return broadcast(*this, arr, std::divides());
+    }
+
+    template<class Tp2_>
+    constexpr auto operator/(Tp2_ scalar) {
+        return broadcast_scalar<false>(scalar, *this, std::divides());
+    }
+
 private:
     std::shared_ptr<data_type[]> data_;
     std::unique_ptr<extent_type> extents_;
@@ -323,6 +363,26 @@ private:
         const extent_type& extents) : 
         data_(data_ptr), extents_(std::make_unique<extent_type>(extents)) {}
 };
+
+template<class Tp1_, class Tp2_>
+constexpr auto operator+(Tp1_ scalar, const ndarray<Tp2_>& arr) {
+    return broadcast_scalar<true>(scalar, arr, std::plus());
+}
+
+template<class Tp1_, class Tp2_>
+constexpr auto operator-(Tp1_ scalar, const ndarray<Tp2_>& arr) {
+    return broadcast_scalar<true>(scalar, arr, std::minus());
+}
+
+template<class Tp1_, class Tp2_>
+constexpr auto operator*(Tp1_ scalar, const ndarray<Tp2_>& arr) {
+    return broadcast_scalar<true>(scalar, arr, std::multiplies());
+}
+
+template<class Tp1_, class Tp2_>
+constexpr auto operator/(Tp1_ scalar, const ndarray<Tp2_>& arr) {
+    return broadcast_scalar<true>(scalar, arr, std::divides());
+}
 
 } // namespace ax
 
