@@ -6,6 +6,8 @@
 
 namespace ax {
 
+namespace ranges {
+
 template<std::ranges::range Rn_, class Tp_>
 constexpr auto accumulate(const Rn_& range, Tp_ x0) {
     return std::accumulate(range.begin(), range.end(), x0);
@@ -27,6 +29,8 @@ constexpr auto product(const Rn_& range) {
     using Tp_ = std::ranges::range_value_t<Rn_>;
     return accumulate(range, Tp_{1}, std::multiplies());
 }
+
+} // namespace ranges
 
 } // namespace ax
 
