@@ -136,6 +136,10 @@ public:
         return extents_->shape();
     }
 
+    constexpr void fill(Tp_ value) {
+        std::fill(data_.get(), data_.get() + size(), value);
+    }
+
     constexpr auto begin() {
         return ndarray_iterator(this, 0);
     }
@@ -152,11 +156,12 @@ public:
         return ndarray_iterator(this, extent());
     }
 
-    template<class Fn_>
+    template<
+        class Fn_,
+        class Tp2_ = std::invoke_result_t<Fn_, Tp_>>
     requires (std::invocable<Fn_, data_type>)
     constexpr auto apply(Fn_&& func) const {
-        using new_dt = std::invoke_result_t<Fn_, data_type>;
-        auto array = ndarray<new_dt>(new_dt{}, this->extents_->shape());
+        auto array = ndarray<Tp2_>(this->extents_->shape());
         auto new_data = array.data();
         auto old_data = this->data();
         for (std::size_t i = 0; i < array.size(); ++i)
@@ -165,7 +170,7 @@ public:
     }
 
     constexpr auto reshape(const std::vector<std::size_t>& shape) const {
-        ax_assert(product(shape) == size(),
+        ax_assert(ranges::product(shape) == size(),
             "New shape does not match size of data!");
         if (is_contiguous()) return ndarray(data_, shape);
         // TODO: REDO THIS!!!
@@ -244,7 +249,7 @@ public:
             old_strides.begin() + sizeof...(Its_),
             old_strides.end());
         auto new_extents = extent_type(new_shape, 
-            new_strides, product(new_shape), is_contiguous());
+            new_strides, ranges::product(new_shape), is_contiguous());
         return ndarray(data_ptr, new_extents);
     }
 
@@ -254,18 +259,24 @@ public:
     ndarray(ndarray<Tp_>&& other) noexcept { *this = std::move(other); }
 
     explicit ndarray(const Tp_* ptr, const std::vector<std::size_t>& shape) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
-        extents_(std::make_unique<extent_type>(shape)) {
+        extents_(std::make_unique<extent_type>(shape)),
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents_->size()])) {
         std::copy(ptr, ptr + extents_->size(), data_.get());
     }
 
     explicit ndarray(const std::vector<std::size_t>& shape) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
-        extents_(std::make_unique<extent_type>(shape)) {}
+        extents_(std::make_unique<extent_type>(shape)),
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents_->size()])) {}
+
+    explicit ndarray(Tp_ value, const std::vector<std::size_t>& shape) :
+        extents_(std::make_unique<extent_type>(shape)),
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents_->size()])) {
+        fill(value);
+    }
 
     explicit ndarray(const extent_type& extents) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])),
-        extents_(std::make_unique<extent_type>(extents)) {}
+        extents_(std::make_unique<extent_type>(extents)),
+        data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])) {}
 
     template<std::size_t N_>
     using Nl_ = detail::nested_init_list<data_type, N_>;
@@ -389,8 +400,8 @@ public:
     }
 
 private:
-    std::shared_ptr<data_type[]> data_;
     std::unique_ptr<extent_type> extents_;
+    std::shared_ptr<data_type[]> data_;
 
     template<std::size_t N_>
     constexpr void init_from_nl(const Nl_<N_>& data) {
@@ -405,11 +416,11 @@ private:
 
     explicit ndarray(const std::shared_ptr<data_type[]>& data_ptr,
         const std::vector<std::size_t>& shape) : 
-        data_(data_ptr), extents_(std::make_unique<extent_type>(shape)) {}
+        extents_(std::make_unique<extent_type>(shape)), data_(data_ptr) {}
 
     explicit ndarray(const std::shared_ptr<data_type[]>& data_ptr,
         const extent_type& extents) : 
-        data_(data_ptr), extents_(std::make_unique<extent_type>(extents)) {}
+        extents_(std::make_unique<extent_type>(extents)), data_(data_ptr) {}
 };
 
 template<class Tp1_, class Tp2_>

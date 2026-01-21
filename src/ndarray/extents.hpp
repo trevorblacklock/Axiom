@@ -85,7 +85,7 @@ public:
     }
 
     ndarray_extents(const std::vector<std::size_t>& shape) : 
-        shape_(shape), strides_(shape.size()), size_(product(shape)) {
+        shape_(shape), strides_(shape.size()), size_(ranges::product(shape)) {
         update_strides();
     }
 

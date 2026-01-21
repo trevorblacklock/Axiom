@@ -2,6 +2,7 @@
 #define NDARRAY_MATH_H_DEFINED
 
 #include <cmath>
+#include <functional>
 
 #include "core.hpp"
 
@@ -65,6 +66,17 @@ constexpr auto abs(const ndarray<Tp_>& array) {
     return array.apply(static_cast<Tp_ (*)(Tp_)>(std::abs));
 }
 
+template<class Tp_, class Ex_>
+constexpr auto pow(const ndarray<Tp_>& array, Ex_ exp) {
+    return array.apply(std::bind(std::pow<Tp_, Ex_>,
+        std::placeholders::_1, exp));
+}
+
+template<class Tp_>
+constexpr auto sqrt(const ndarray<Tp_>& array) {
+    return array.apply(static_cast<Tp_ (*)(Tp_)>(std::sqrt));
+}
+
 template<class Tp_>
 constexpr auto floor(const ndarray<Tp_>& array) {
     return array.apply(static_cast<double (*)(Tp_)>(std::floor));
@@ -81,25 +93,37 @@ constexpr auto rint(const ndarray<Tp_>& array) {
 }
 
 template<class Tp_>
-constexpr auto sum(const ndarray<Tp_>& array, int axis = 0) {
-    auto& old_shape = array.extents().shape();
+constexpr auto sum(const ndarray<Tp_>& array) {
+    Tp_ result = Tp_{};
+    auto data = array.data();
+    for (std::size_t i = 0; i < array.size(); ++i)
+        result += data[i];
+    return result;
+}
+
+template<class Tp_>
+constexpr auto sum(const ndarray<Tp_>& array, std::size_t axis) {
+    // TODO: OPTIMIZE THIS? BENCHMARK FIRST
+    const auto& old_shape = array.shape();
     auto new_shape = std::vector<std::size_t>(array.rank() - 1);
     for (auto&& [i, x] : 
         std::views::zip(
         std::views::iota(0ul, array.rank()) | 
         std::views::drop(axis),
-        new_shape))
+        new_shape)) {
         x = old_shape[i];
-    auto new_array = ndarray<Tp_>(new_shape);
-    if (axis != 0) {
-        auto range = std::views::iota(0ul, array.rank());
-        auto axes = std::vector(range.begin(), range.end());
-        std::swap(axes[axis], axes[0]);
-        array = array.transpose(axes);
     }
+        
+    auto new_array = ndarray<Tp_>(new_shape); 
+    auto range = std::views::iota(0ul, array.rank());
+    auto axes = std::vector(range.begin(), range.end());
+    std::swap(axes[axis], axes[0]);
+    auto array_view = array.transpose(axes);
+
     for (auto i : std::views::iota(0ul, old_shape[axis])) {
-        new_array += array[i];
+        new_array += array_view.view(i);
     }
+
     return new_array;
 }
 
