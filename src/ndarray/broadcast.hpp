@@ -113,6 +113,20 @@ constexpr void broadcast_apply_scalar(
 } // namespace detail
 
 template<
+    class Tp1_,
+    class Tp2_,
+    class Fn_>
+requires (std::invocable<Fn_, Tp1_, Tp2_>
+    && std::is_convertible_v<std::invoke_result_t<Fn_, Tp1_, Tp2_>, Tp2_>)
+constexpr void broadcast_scalar_self(
+    const Tp1_& scalar,
+    Tp2_& arr,
+    Fn_&& func) {
+    detail::broadcast_apply_scalar<false>(scalar,
+        arr.data(), arr.data(), func, arr.size());
+}
+
+template<
     bool Sf_,
     class Tp1_,
     class Tp2_,
@@ -127,6 +141,90 @@ constexpr auto broadcast_scalar(
     detail::broadcast_apply_scalar<Sf_>(scalar, 
         arr1.data(), arr2.data(), func, arr2.size());
     return arr2;
+}
+
+template<
+    class Tp1_,
+    class Fn_>
+requires (std::invocable<Fn_, Tp1_, Tp1_>)
+constexpr void broadcast_self(
+    const ndarray<Tp1_>& arr1,
+    const ndarray<Tp1_>& arr2,
+    Fn_&& func) {
+    // Check for scalar operations
+    if (arr2.size() == 1)
+        broadcast_scalar_self(*arr2.data(), arr1, func);
+
+    auto& shape1 = arr1.shape();
+    auto& shape2 = arr2.shape();
+    auto& strides1 = arr1.extents().strides();
+    auto& strides2 = arr2.extents().strides();
+    
+    auto rank1 = arr1.rank();
+    auto rank2 = arr2.rank();
+    auto [rmin, rmax] = std::minmax(rank1, rank2);
+
+    for (std::size_t i = 0; i < rmin; ++i) {
+        auto x1 = shape1[rank1 - i - 1];
+        auto x2 = shape2[rank2 - i - 1];
+        ax_assert(x1 == x2 || x1 == 1 || x2 == 1,
+            "Cannot broadcast arrays of incompatible shape!");
+    }
+
+    if (arr1.is_contiguous() && arr2.is_contiguous()) {
+        if (arr1.size() == arr2.size()) {
+            detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
+                arr1.data(), func, arr1.size());
+        } 
+        else {
+            auto stride_idx = rmax - rmin - 1;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data() + i, 
+                        arr2.data(), arr1.data() + i, func, arr2.size());
+                }          
+            }
+            else {
+                auto stride = strides2[stride_idx];
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data(),
+                        arr2.data() + i, arr1.data() + i, func, arr1.size());
+                }
+            }
+        }
+    }
+    else {
+        std::size_t idx3 = 0;
+        if (arr1.size() == arr2.size()) {
+            detail::broadcast_apply_general(arr1.data(), arr2.data(), 
+                arr1.data(), func, shape1.data(), strides1.data(), 
+                strides2.data(), arr1.rank(), idx3);
+        }
+        else {  
+            auto rdiff = rmax - rmin;
+            auto stride_idx = rdiff - 1;
+            auto offset_shape = shape1.data() + rdiff;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                auto offset_strides = strides1.data() + rdiff;
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data() + i,
+                        arr2.data(), arr1.data(), func, offset_shape,
+                        offset_strides, strides2.data(), arr2.rank(), idx3);
+                }
+            }
+            else {
+                auto stride = strides2[stride_idx];
+                auto offset_strides = strides2.data() + rdiff;
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data(), 
+                    arr2.data() + i, arr1.data(), func, offset_shape,
+                        strides1.data(), offset_strides, arr1.rank(), idx3);
+                }
+            }
+        }
+    }
 }
 
 template<
@@ -202,7 +300,7 @@ constexpr auto broadcast(
                 arr3.data(), func, shape1.data(), strides1.data(), 
                 strides2.data(), arr3.rank(), idx3);
         }
-        else {
+        else {  
             auto rdiff = rmax - rmin;
             auto stride_idx = rdiff - 1;
             auto offset_shape = shape3.data() + rdiff;
@@ -224,7 +322,6 @@ constexpr auto broadcast(
                         strides1.data(), offset_strides, arr1.rank(), idx3);
                 }
             }
-
         }
     }
     return arr3;

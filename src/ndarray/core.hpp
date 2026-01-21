@@ -340,6 +340,54 @@ public:
         return broadcast_scalar<false>(scalar, *this, std::divides());
     }
 
+    template<class Tp2_>
+    constexpr auto operator+=(const ndarray<Tp2_>& arr) {
+        broadcast_self(*this, arr, std::plus());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator+=(Tp2_ scalar) {
+        broadcast_scalar_self(scalar, *this, std::plus());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator-=(const ndarray<Tp2_>& arr) {
+        broadcast_self(*this, arr, std::minus());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator-=(Tp2_ scalar) {
+        broadcast_scalar_self(scalar, *this, std::minus());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator*=(const ndarray<Tp2_>& arr) {
+        broadcast_self(*this, arr, std::multiplies());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator*=(Tp2_ scalar) {
+        broadcast_scalar_self(scalar, *this, std::multiplies());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator/=(const ndarray<Tp2_>& arr) {
+        broadcast_self(*this, arr, std::divides());
+        return *this;
+    }
+
+    template<class Tp2_>
+    constexpr auto operator/=(Tp2_ scalar) {
+        broadcast_scalar_self(scalar, *this, std::divides());
+        return *this;
+    }
+
 private:
     std::shared_ptr<data_type[]> data_;
     std::unique_ptr<extent_type> extents_;
