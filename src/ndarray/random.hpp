@@ -27,7 +27,7 @@ static inline auto randint(
     int low, int high) {
     ax_assert(low < high, "Low value cannot exceed or be equal to high value!");
     std::uniform_int_distribution uniform(low, high);
-    auto array = ndarray<int>(0, shape);
+    auto array = ndarray<int>(shape);
     auto ptr = array.data();
     for (std::size_t i = 0; i < array.size(); ++i)
         ptr[i] = uniform(generator_);
