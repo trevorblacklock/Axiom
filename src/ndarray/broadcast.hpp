@@ -90,6 +90,7 @@ constexpr void broadcast_apply_general(
 }
 
 template<
+    bool Sf_,
     class Tp1_, 
     class Tp2_,
     class Fn_,
@@ -102,11 +103,31 @@ constexpr void broadcast_apply_scalar(
     Fn_&& func,
     std::size_t size) {
     for (std::size_t i = 0; i < size; ++i) {
-        data2[i] = func(scalar, data1[i]);
+        if constexpr (Sf_ == true)
+            data2[i] = func(scalar, data1[i]);
+        else
+            data2[i] = func(data1[i], scalar);
     }
 }
 
 } // namespace detail
+
+template<
+    bool Sf_,
+    class Tp1_,
+    class Tp2_,
+    class Fn_,
+    class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
+requires (std::invocable<Fn_, Tp1_, Tp2_>)
+constexpr auto broadcast_scalar(
+    const Tp1_& scalar,
+    const ndarray<Tp2_>& arr1,
+    Fn_&& func) {
+    ndarray<Tp3_> arr2(arr1.extents());
+    detail::broadcast_apply_scalar<Sf_>(scalar, 
+        arr1.data(), arr2.data(), func, arr2.size());
+    return arr2;
+}
 
 template<
     class Tp1_, 
@@ -120,9 +141,9 @@ constexpr auto broadcast(
     Fn_&& func) {
     // Quickly check for scalar operations
     if (arr1.size() == 1) 
-        return broadcast_scalar(*arr1.data(), arr2, func);
+        return broadcast_scalar<true>(*arr1.data(), arr2, func);
     else if (arr2.size() == 1) 
-        return broadcast_scalar(*arr2.data(), arr1, func);
+        return broadcast_scalar<false>(*arr2.data(), arr1, func);
 
     auto rank1 = arr1.rank();
     auto rank2 = arr2.rank();
@@ -158,14 +179,20 @@ constexpr auto broadcast(
                 arr3.data(), func, arr1.size());
         } 
         else {
-            const auto& [it_arr, it_strides, ot_arr] 
-                = rank1 > rank2 
-                ? std::tie(arr1, strides1, arr2) 
-                : std::tie(arr2, strides2, arr1);
-            auto stride = it_strides[rmax - rmin - 1];
-            for (std::size_t i = 0; i < it_arr.size(); i += stride) {
-                detail::broadcast_apply_contiguous(it_arr.data() + i, 
-                    ot_arr.data(), arr3.data() + i, func, ot_arr.size());
+            auto stride_idx = rmax - rmin - 1;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data() + i, 
+                        arr2.data(), arr3.data() + i, func, arr2.size());
+                }          
+            }
+            else {
+                auto stride = strides2[stride_idx];
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_contiguous(arr1.data(),
+                        arr2.data() + i, arr3.data() + i, func, arr1.size());
+                }
             }
         }
     }
@@ -176,38 +203,31 @@ constexpr auto broadcast(
                 strides2.data(), arr3.rank(), idx3);
         }
         else {
-            const auto& [it_arr, it_strides, ot_arr, ot_strides] 
-                = rank1 > rank2 
-                ? std::tie(arr1, strides1, arr2, strides2) 
-                : std::tie(arr2, strides2, arr1, strides1);
             auto rdiff = rmax - rmin;
-            auto stride = it_strides[rmax - rmin - 1];
-            auto of_strides = it_strides.data() + rdiff;
-            auto of_shape = shape3.data() + rdiff;
-            for (std::size_t i = 0; i < it_arr.size(); i += stride) {
-                detail::broadcast_apply_general(it_arr.data() + i,
-                    ot_arr.data(), arr3.data(), func, of_shape,
-                    of_strides, ot_strides.data(), ot_arr.rank(), idx3);
+            auto stride_idx = rdiff - 1;
+            auto offset_shape = shape3.data() + rdiff;
+            if (rank1 > rank2) {
+                auto stride = strides1[stride_idx];
+                auto offset_strides = strides1.data() + rdiff;
+                for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data() + i,
+                        arr2.data(), arr3.data(), func, offset_shape,
+                        offset_strides, strides2.data(), arr2.rank(), idx3);
+                }
             }
+            else {
+                auto stride = strides2[stride_idx];
+                auto offset_strides = strides2.data() + rdiff;
+                for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                    detail::broadcast_apply_general(arr1.data(), 
+                    arr2.data() + i, arr3.data(), func, offset_shape,
+                        strides1.data(), offset_strides, arr1.rank(), idx3);
+                }
+            }
+
         }
     }
     return arr3;
-}
-
-template<
-    class Tp1_,
-    class Tp2_,
-    class Fn_,
-    class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
-requires (std::invocable<Fn_, Tp1_, Tp2_>)
-constexpr auto broadcast_scalar(
-    const Tp1_& scalar,
-    const ndarray<Tp2_>& arr1,
-    Fn_&& func) {
-    ndarray<Tp3_> arr2(arr1.extents());
-    detail::broadcast_apply_scalar(scalar, 
-        arr1.data(), arr2.data(), func, arr2.size());
-    return arr2;
 }
 
 } // namespace ax

@@ -132,6 +132,10 @@ public:
         return data_.unique();
     }
 
+    constexpr auto& shape() const noexcept {
+        return extents_->shape();
+    }
+
     constexpr auto begin() {
         return ndarray_iterator(this, 0);
     }
@@ -246,19 +250,10 @@ public:
 
     ndarray() = default;
 
-    // Copy constructor must support casting to abled types
-    template<class Tps_>
-    requires (std::is_convertible<Tp_, Tps_>::value)
-    ndarray(const ndarray<Tps_>& other) { *this = other; }
-
+    ndarray(const ndarray<Tp_>& other) { *this = other; }
     ndarray(ndarray<Tp_>&& other) noexcept { *this = std::move(other); }
 
-    template<std::integral... Sz_>
-    explicit ndarray(Sz_... shape) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[(1 * ... * shape)])),
-        extents_(std::make_unique<extent_type>(shape...)) {}
-
-    explicit ndarray(Tp_* ptr, const std::vector<std::size_t>& shape) :
+    explicit ndarray(const Tp_* ptr, const std::vector<std::size_t>& shape) :
         data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
         extents_(std::make_unique<extent_type>(shape)) {
         std::copy(ptr, ptr + extents_->size(), data_.get());
@@ -267,12 +262,6 @@ public:
     explicit ndarray(const std::vector<std::size_t>& shape) :
         data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
         extents_(std::make_unique<extent_type>(shape)) {}
-
-    explicit ndarray(Tp_ value, const std::vector<std::size_t>& shape) :
-        data_(std::shared_ptr<Tp_[]>(new Tp_[product(shape)])),
-        extents_(std::make_unique<extent_type>(shape)) { 
-        std::fill(data_.get(), data_.get() + size(), value); 
-    }
 
     explicit ndarray(const extent_type& extents) :
         data_(std::shared_ptr<Tp_[]>(new Tp_[extents.size()])),
@@ -297,14 +286,11 @@ public:
         return data_[flat_idx];
     }
 
-    template<class Tps_>
-    requires (std::is_convertible_v<Tp_, Tps_>)
-    constexpr auto& operator=(const ndarray<Tps_>& other) {
+    constexpr auto& operator=(const ndarray<Tp_>& other) {
         auto size = other.size();
         extents_ = std::make_unique<extent_type>(other.extents());
         data_ = std::shared_ptr<Tp_[]>(new Tp_[size]);
-        std::copy(static_cast<Tps_*>(other.data()), 
-            static_cast<Tps_*>(other.data()) + size, data_.get());
+        std::copy(other.data(), other.data() + size, data_.get());
         return *this;
     }
     

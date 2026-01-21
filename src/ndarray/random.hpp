@@ -10,19 +10,19 @@ namespace ax::random {
 static std::random_device device_;
 static std::mt19937 generator_(device_());
 
-constexpr auto randn(
+static inline auto randn(
     const std::vector<std::size_t>& shape,
     double mean = 0.0f, 
     double stdev = 1.0f) {
     std::normal_distribution gaussian(mean, stdev);
-    auto array = ndarray<double>(0.0f, shape);
+    auto array = ndarray<double>(shape);
     auto ptr = array.data();
     for (std::size_t i = 0; i < array.size(); ++i) 
         ptr[i] = gaussian(generator_);
     return array;
 }
 
-constexpr auto randint(
+static inline auto randint(
     const std::vector<std::size_t>& shape,
     int low, int high) {
     ax_assert(low < high, "Low value cannot exceed or be equal to high value!");

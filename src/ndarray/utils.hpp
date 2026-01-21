@@ -8,6 +8,11 @@
 namespace ax {
 
 template<class Tp_>
+constexpr auto zeros(const std::vector<std::size_t>& shape) {
+    return ndarray<Tp_>(shape);
+}
+
+template<class Tp_>
 constexpr auto diagonal(const std::vector<Tp_>& data) {
     auto size = data.size();
     auto array = ndarray<Tp_>(size, size);

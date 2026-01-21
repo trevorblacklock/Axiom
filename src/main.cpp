@@ -17,12 +17,12 @@
 // BENCHMARK_MAIN();
 
 int main() {
-    static auto a = ax::random::randn({10, 10});
+    auto a = ax::random::randn({3, 3, 3});
+    auto b = ax::random::randn({3, 3});
+    auto c = ax::broadcast(a, b, std::divides());
+    auto d = ax::broadcast(b, a, std::divides());
 
-    std::vector<std::ranges::iota_view<std::size_t, std::size_t>> ranges(a.rank());
-    for (auto&& [i, x] : a.extents().shape() | std::views::enumerate) 
-        ranges[i] = std::views::iota(0ul, x);
+    auto v = {a, b, c, d};
 
-    for (const auto& x : ranges) for (const auto& y : x) 
-        std::cout << y << std::endl;
+    for (auto x : v) std::cout << x << std::endl;
 }
