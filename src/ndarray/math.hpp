@@ -74,7 +74,7 @@ constexpr auto pow(const ndarray<Tp_>& array, Ex_ exp) {
 
 template<class Tp_>
 constexpr auto sqrt(const ndarray<Tp_>& array) {
-    return array.apply(static_cast<Tp_ (*)(Tp_)>(std::sqrt));
+    return array.apply(std::sqrt<Tp_>);
 }
 
 template<class Tp_>
