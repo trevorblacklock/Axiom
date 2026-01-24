@@ -56,7 +56,7 @@ template<class Tp1_,
     requires(std::invocable<Fn_, Tp1_, Tp2_>)
 inline void broadcast_apply_general(const Tp1_* const  data1,
                                     const Tp2_* const  data2,
-                                    Tp3_*              data3,
+                                    Tp3_* const        data3,
                                     Fn_&&              func,
                                     const std::size_t* shape,
                                     const std::size_t* strides1,
@@ -65,15 +65,15 @@ inline void broadcast_apply_general(const Tp1_* const  data1,
                                     std::size_t&       idx,
                                     std::size_t        idx1 = 0,
                                     std::size_t        idx2 = 0) {
-    const auto st1  = *strides1;
-    const auto st2  = *strides2;
-    const auto rank = *shape;
+    const auto stride1 = *strides1;
+    const auto stride2 = *strides2;
+    const auto rank    = *shape;
     if (n_rank == 1) {
 #pragma omp simd
         for (std::size_t i = 0; i < rank; ++i) {
             data3[idx++] = func(data1[idx1], data2[idx2]);
-            idx1 += st1;
-            idx2 += st2;
+            idx1 += stride1;
+            idx2 += stride2;
         }
     } else {
         shape++;
@@ -83,8 +83,8 @@ inline void broadcast_apply_general(const Tp1_* const  data1,
         for (std::size_t i = 0; i < rank; ++i) {
             broadcast_apply_general(data1, data2, data3, func, shape, strides1,
                                     strides2, n_rank, idx, idx1, idx2);
-            idx1 += st1;
-            idx2 += st2;
+            idx1 += stride1;
+            idx2 += stride2;
         }
     }
 }
