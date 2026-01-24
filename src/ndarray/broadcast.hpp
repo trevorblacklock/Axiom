@@ -53,53 +53,6 @@ template<class Tp1_,
          class Fn_,
          class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
     requires(std::invocable<Fn_, Tp1_, Tp2_>)
-class foo {
- public:
-    explicit foo(const Tp1_* const data1,
-                 const Tp2_* const data2,
-                 Tp3_*             data3,
-                 Fn_&&             func)
-        : data1_(data1),
-          data2_(data2),
-          data3_(data3),
-          func_(func) {
-    }
-
-    constexpr void apply(const std::size_t* shape,
-                         const std::size_t* strides1,
-                         const std::size_t* strides2,
-                         std::size_t        nrank,
-                         std::size_t        idx1 = 0,
-                         std::size_t        idx2 = 0) {
-        if (nrank == 0) {
-            *(data3_++) = func_(data1_[idx1], data2_[idx2]);
-        } else {
-            auto off1 = *strides1;
-            auto off2 = *strides2;
-            auto rank = *shape;
-            shape++;
-            strides1++;
-            strides2++;
-            nrank--;
-            apply(shape, strides1, strides2, nrank, idx1, idx2);
-            for (std::size_t i = 1; i < rank; ++i)
-                apply(shape, strides1, strides2, nrank, idx1 += off1,
-                      idx2 += off2);
-        }
-    }
-
- private:
-    const Tp1_* const data1_;
-    const Tp2_* const data2_;
-    Tp3_*             data3_;
-    Fn_&&             func_;
-};
-
-template<class Tp1_,
-         class Tp2_,
-         class Fn_,
-         class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
-    requires(std::invocable<Fn_, Tp1_, Tp2_>)
 constexpr void broadcast_apply_general(const Tp1_* const  data1,
                                        const Tp2_* const  data2,
                                        Tp3_*              data3,
@@ -189,11 +142,9 @@ constexpr void broadcast_helper(const ndarray<Tp1_>& arr1,
             }
         }
     } else if (arr1.size() == arr2.size()) {
-        foo<Tp1_, Tp2_, Fn_> bar(arr1.data(), arr2.data(), arr3.data(), func);
-        bar.apply(shape3.data(), strides1.data(), strides2.data(), arr3.rank());
-        // detail::broadcast_apply_general(arr1.data(), arr2.data(),
-        //     arr3.data(), func, shape3.data(), strides1.data(),
-        //     strides2.data(), arr3.rank());
+        detail::broadcast_apply_general(arr1.data(), arr2.data(), arr3.data(),
+                                        func, shape3.data(), strides1.data(),
+                                        strides2.data(), arr3.rank());
     } else {
         auto rdiff        = rmax - rmin;
         auto stride_idx   = rdiff - 1;
