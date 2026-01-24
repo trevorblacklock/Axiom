@@ -6,14 +6,11 @@
 #if defined(NDEBUG)
 #define ax_assert(condition, message)
 #else
-#define ax_assert(condition, message) \
-    if (!(condition)) \
-    { \
-        std::cerr << __FILE__ << ':' \
-            << __LINE__  << ":\n"\
-            << "Assertion failed: " \
-            << message << '\n'; \
-        std::abort(); \
+#define ax_assert(condition, message)                         \
+    if (!(condition)) {                                       \
+        std::cerr << __FILE__ << ':' << __LINE__ << ":\n"     \
+                  << "Assertion failed: " << message << '\n'; \
+        std::abort();                                         \
     }
 #endif
 

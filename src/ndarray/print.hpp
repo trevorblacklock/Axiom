@@ -13,25 +13,28 @@ void pretty_print(std::ostream& os, const ndarray<Tp_>& array, std::size_t ws) {
         os << '[';
         for (std::size_t i = 0; i < array.extent(); ++i) {
             os << array[i];
-            if (i != array.extent() - 1) os << ", ";
+            if (i != array.extent() - 1)
+                os << ", ";
         }
         os << ']';
-    }
-    else if (array.rank() == 2) {
+    } else if (array.rank() == 2) {
         os << '[';
         for (std::size_t i = 0; i < array.extent(); ++i) {
-            if (i != 0) os << std::string(ws, ' ');
+            if (i != 0)
+                os << std::string(ws, ' ');
             pretty_print(os, array.view(i), 0);
-            if (i != array.extent() - 1) os << ",\n";
+            if (i != array.extent() - 1)
+                os << ",\n";
         }
         os << ']';
-    }
-    else {
+    } else {
         os << '[';
         for (std::size_t i = 0; i < array.extent(); ++i) {
-            if (i != 0) os << std::string(ws, ' ');
+            if (i != 0)
+                os << std::string(ws, ' ');
             pretty_print(os, array.view(i), ws + 1);
-            if (i != array.extent() - 1) os << ",\n\n";
+            if (i != array.extent() - 1)
+                os << ",\n\n";
         }
         os << ']';
     }

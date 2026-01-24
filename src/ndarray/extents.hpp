@@ -1,10 +1,10 @@
 #ifndef EXTENTS_H_DEFINED
 #define EXTENTS_H_DEFINED
 
+#include "../ranges/numeric.hpp"
+
 #include <numeric>
 #include <vector>
-
-#include "../ranges/numeric.hpp"
 
 namespace ax {
 
@@ -15,10 +15,9 @@ enum class stride_type : int {
 
 namespace detail {
 
-constexpr auto flat_index(
-    const std::size_t* indices,
-    const std::size_t* strides,
-    const std::size_t size) noexcept {
+constexpr auto flat_index(const std::size_t* indices,
+                          const std::size_t* strides,
+                          const std::size_t  size) noexcept {
     std::size_t result = 0;
     for (std::size_t i = 0; i < size; ++i)
         result += indices[i] * strides[i];
@@ -26,13 +25,12 @@ constexpr auto flat_index(
 }
 
 template<std::integral It_, std::integral... Its_>
-constexpr auto flat_index(
-    std::size_t& result,
-    const std::size_t* strideptr, 
-    It_ first, 
-    Its_... rest) {
+constexpr auto flat_index(std::size_t&       result,
+                          const std::size_t* strideptr,
+                          It_                first,
+                          Its_... rest) {
     result += first * (*strideptr);
-    if constexpr (sizeof...(Its_) >= 1) 
+    if constexpr (sizeof...(Its_) >= 1)
         flat_index(result, strideptr + 1, rest...);
 }
 
@@ -40,9 +38,9 @@ constexpr auto flat_index(
 
 template<stride_type St_ = stride_type::row_major>
 class ndarray_extents {
-public:
+ public:
     static constexpr auto stride_type = St_;
-    
+
     constexpr auto extent(std::size_t rank = 0) const {
         return shape_.at(rank);
     }
@@ -72,7 +70,7 @@ public:
     }
 
     template<std::integral... Its_>
-    requires (sizeof...(Its_) >= 1)
+        requires(sizeof...(Its_) >= 1)
     constexpr auto index(Its_... idxs) const {
         std::size_t index = 0;
         detail::flat_index(index, strides_.data(), idxs...);
@@ -84,52 +82,61 @@ public:
         return detail::flat_index(idxs.data(), strides_.data(), rank());
     }
 
-    ndarray_extents(const std::vector<std::size_t>& shape) : 
-        shape_(shape), strides_(shape.size()), size_(ranges::product(shape)) {
+    ndarray_extents(const std::vector<std::size_t>& shape)
+        : shape_(shape),
+          strides_(shape.size()),
+          size_(ranges::product(shape)) {
         update_strides();
     }
 
-    ndarray_extents(
-        const std::vector<std::size_t>& shape,
-        std::size_t size) : 
-        shape_(shape), strides_(shape.size()), size_(size) {
+    ndarray_extents(const std::vector<std::size_t>& shape, std::size_t size)
+        : shape_(shape),
+          strides_(shape.size()),
+          size_(size) {
         update_strides();
     }
 
-    ndarray_extents(
-        const std::vector<std::size_t>& shape,
-        const std::vector<std::size_t>& strides,
-        std::size_t size, bool contiguity = true) :
-        shape_(shape), strides_(strides), 
-        size_(size), contiguity_(contiguity) {}
+    ndarray_extents(const std::vector<std::size_t>& shape,
+                    const std::vector<std::size_t>& strides,
+                    std::size_t                     size,
+                    bool                            contiguity = true)
+        : shape_(shape),
+          strides_(strides),
+          size_(size),
+          contiguity_(contiguity) {
+    }
 
     constexpr auto& operator=(const ndarray_extents& other) {
-        shape_ = other.shape();
-        strides_ = other.strides();
-        size_ = other.size();
+        shape_      = other.shape();
+        strides_    = other.strides();
+        size_       = other.size();
         contiguity_ = other.is_contiguous();
         return *this;
     }
 
-    ndarray_extents(const ndarray_extents& extents) { *this = extents; }
+    ndarray_extents(const ndarray_extents& extents) {
+        *this = extents;
+    }
+
     ndarray_extents(ndarray_extents&& extents) = delete;
 
     template<std::integral... Sz_>
-    constexpr ndarray_extents(Sz_... shape) :
-        shape_({ static_cast<std::size_t>(shape)... }),
-        strides_(sizeof...(Sz_)), size_((1 * ... * shape)) {
+    constexpr ndarray_extents(Sz_... shape)
+        : shape_({static_cast<std::size_t>(shape)...}),
+          strides_(sizeof...(Sz_)),
+          size_((1 * ... * shape)) {
         update_strides();
     }
 
-private:
+ private:
     std::vector<std::size_t> shape_;
     std::vector<std::size_t> strides_;
-    std::size_t size_;
-    bool contiguity_ = true;
+    std::size_t              size_;
+    bool                     contiguity_ = true;
 
     constexpr void update_strides() {
-        std::exclusive_scan(shape_.rbegin(), shape_.rend(), 
-            strides_.rbegin(), 1, std::multiplies());
+        std::exclusive_scan(shape_.rbegin(), shape_.rend(), strides_.rbegin(),
+                            1, std::multiplies());
     }
 };
 
