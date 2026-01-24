@@ -40,13 +40,13 @@ class ndarray_iterator {
         return *this;
     }
 
-    auto& operator++(int) {
+    auto operator++(int) {
         auto tmp = *this;
         ++idx_;
         return tmp;
     }
 
-    auto& operator--(int) {
+    auto operator--(int) {
         auto tmp = *this;
         --idx_;
         return tmp;
