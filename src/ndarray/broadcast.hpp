@@ -61,10 +61,11 @@ constexpr void broadcast_apply_general(const Tp1_* const  data1,
                                        const std::size_t* strides1,
                                        const std::size_t* strides2,
                                        std::size_t        n_rank,
+                                       std::size_t&       idx,
                                        std::size_t        idx1 = 0,
                                        std::size_t        idx2 = 0) {
     if (n_rank == 0) {
-        *(data3++) = func(data1[idx1], data2[idx2]);
+        data3[idx++] = func(data1[idx1], data2[idx2]);
     } else {
         const auto offset1 = *strides1;
         const auto offset2 = *strides2;
@@ -74,12 +75,12 @@ constexpr void broadcast_apply_general(const Tp1_* const  data1,
         strides2++;
         n_rank--;
         broadcast_apply_general(data1, data2, data3, func, shape, strides1,
-                                strides2, n_rank, idx1, idx2);
+                                strides2, n_rank, idx, idx1, idx2);
         for (std::size_t i = 1; i < rank; ++i) {
             idx1 += offset1;
             idx2 += offset2;
             broadcast_apply_general(data1, data2, data3, func, shape, strides1,
-                                    strides2, n_rank, idx1, idx2);
+                                    strides2, n_rank, idx, idx1, idx2);
         }
     }
 }
@@ -110,41 +111,42 @@ constexpr void broadcast_helper(const ndarray<Tp1_>& arr1,
                                 const ndarray<Tp2_>& arr2,
                                 ndarray<Tp3_>&       arr3,
                                 Fn_&&                func) {
-
     const auto& shape3   = arr3.shape();
     const auto& strides1 = arr1.strides();
     const auto& strides2 = arr2.strides();
 
-    auto rank1        = arr1.rank();
-    auto rank2        = arr2.rank();
+    std::size_t idx   = 0;
+    auto        rank1 = arr1.rank();
+    auto        rank2 = arr2.rank();
     auto [rmax, rmin] = std::minmax(rank1, rank2);
 
-    if (arr1.is_contiguous() && arr2.is_contiguous()) {
-        if (arr1.size() == arr2.size()) {
-            detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
-                                               arr3.data(), func, arr1.size());
+    auto is_similar   = arr1.is_contiguous() && arr2.is_contiguous();
+    auto is_same_size = arr1.size() == arr2.size();
+
+    if (is_similar && is_same_size) {
+        detail::broadcast_apply_contiguous(arr1.data(), arr2.data(),
+                                           arr3.data(), func, arr1.size());
+    } else if (is_similar) {
+        auto stride_idx = rmax - rmin - 1;
+        if (rank1 > rank2) {
+            auto stride = strides1[stride_idx];
+            for (std::size_t i = 0; i < arr1.size(); i += stride) {
+                detail::broadcast_apply_contiguous(arr1.data() + i, arr2.data(),
+                                                   arr3.data() + i, func,
+                                                   arr2.size());
+            }
         } else {
-            auto stride_idx = rmax - rmin - 1;
-            if (rank1 > rank2) {
-                auto stride = strides1[stride_idx];
-                for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(
-                        arr1.data() + i, arr2.data(), arr3.data() + i, func,
-                        arr2.size());
-                }
-            } else {
-                auto stride = strides2[stride_idx];
-                for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                    detail::broadcast_apply_contiguous(
-                        arr1.data(), arr2.data() + i, arr3.data() + i, func,
-                        arr1.size());
-                }
+            auto stride = strides2[stride_idx];
+            for (std::size_t i = 0; i < arr2.size(); i += stride) {
+                detail::broadcast_apply_contiguous(arr1.data(), arr2.data() + i,
+                                                   arr3.data() + i, func,
+                                                   arr1.size());
             }
         }
-    } else if (arr1.size() == arr2.size()) {
+    } else if (is_same_size) {
         detail::broadcast_apply_general(arr1.data(), arr2.data(), arr3.data(),
                                         func, shape3.data(), strides1.data(),
-                                        strides2.data(), arr3.rank());
+                                        strides2.data(), arr3.rank(), idx);
     } else {
         auto rdiff        = rmax - rmin;
         auto stride_idx   = rdiff - 1;
@@ -153,17 +155,19 @@ constexpr void broadcast_helper(const ndarray<Tp1_>& arr1,
             auto stride         = strides1[stride_idx];
             auto offset_strides = strides1.data() + rdiff;
             for (std::size_t i = 0; i < arr1.size(); i += stride) {
-                detail::broadcast_apply_general(
-                    arr1.data() + i, arr2.data(), arr3.data(), func,
-                    offset_shape, offset_strides, strides2.data(), arr2.rank());
+                detail::broadcast_apply_general(arr1.data() + i, arr2.data(),
+                                                arr3.data(), func, offset_shape,
+                                                offset_strides, strides2.data(),
+                                                arr2.rank(), idx);
             }
         } else {
             auto stride         = strides2[stride_idx];
             auto offset_strides = strides2.data() + rdiff;
             for (std::size_t i = 0; i < arr2.size(); i += stride) {
-                detail::broadcast_apply_general(
-                    arr1.data(), arr2.data() + i, arr3.data(), func,
-                    offset_shape, strides1.data(), offset_strides, arr1.rank());
+                detail::broadcast_apply_general(arr1.data(), arr2.data() + i,
+                                                arr3.data(), func, offset_shape,
+                                                strides1.data(), offset_strides,
+                                                arr1.rank(), idx);
             }
         }
     }
