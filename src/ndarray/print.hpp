@@ -3,6 +3,9 @@
 
 #include "core.hpp"
 
+#include <format>
+#include <sstream>
+
 namespace ax {
 
 namespace detail {
@@ -43,12 +46,28 @@ void pretty_print(std::ostream& os, const ndarray<Tp_>& array, std::size_t ws) {
 } // namespace detail
 
 template<class Tp_>
-std::ostream& operator<<(std::ostream& os, const ndarray<Tp_>& array) {
+inline std::ostream& operator<<(std::ostream& os, const ndarray<Tp_>& array) {
     os << "array(";
     detail::pretty_print(os, array, 7);
     return os << ")";
 }
 
 } // namespace ax
+
+template<typename Ch_>
+struct basic_ostream_formatter :
+    std::formatter<std::basic_string_view<Ch_>, Ch_> {
+    template<typename Tp_, typename It_>
+    auto format(const Tp_&                           value,
+                std::basic_format_context<It_, Ch_>& ctx) const {
+        std::basic_stringstream<Ch_> ss;
+        ss << value;
+        return std::formatter<std::basic_string_view<Ch_>, Ch_>::format(
+            ss.view(), ctx);
+    }
+};
+
+template<class Tp_>
+struct std::formatter<ax::ndarray<Tp_>> : basic_ostream_formatter<char> {};
 
 #endif /* NDARRAY_PRINT_H_DEFINED */
