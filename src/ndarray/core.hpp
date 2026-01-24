@@ -94,6 +94,32 @@ constexpr void transpose_helper(const std::size_t*              old_shape,
     }
 }
 
+template<class Tp_>
+constexpr void reshape_helper(Tp_* const         data1,
+                              const Tp_* const   data2,
+                              const std::size_t* shape,
+                              const std::size_t* strides,
+                              std::size_t        nrank,
+                              std::size_t&       idx1,
+                              std::size_t        idx2 = 0) {
+    const auto stride = *strides;
+    const auto rank   = *shape;
+    if (nrank == 1) {
+        for (std::size_t i = 0; i < rank; ++i) {
+            data1[idx1++] = data2[idx2];
+            idx2 += stride;
+        }
+    } else {
+        shape++;
+        strides++;
+        nrank--;
+        for (std::size_t i = 0; i < rank; ++i) {
+            reshape_helper(data1, data2, shape, strides, nrank, idx1, idx2);
+            idx2 += stride;
+        }
+    }
+}
+
 } // namespace detail
 
 template<class Tp_>
@@ -176,36 +202,21 @@ class ndarray {
     constexpr auto reshape(const std::vector<std::size_t>& shape) const {
         ax_assert(ranges::product(shape) == size(),
                   "New shape does not match size of data!");
-        if (is_contiguous())
+        if (is_contiguous()) {
             return ndarray(data_, shape);
-        // TODO: REDO THIS!!!
-        auto&                    strides = extents_->strides();
-        ndarray<data_type>       array(data_type {}, shape);
-        std::vector<std::size_t> index(this->rank());
-
-        auto new_ptr = array.data();
-        auto old_ptr = this->data();
-
-        for (std::size_t i = 0; i < this->size(); ++i) {
-            // Map 1d index to nd
-            auto k = i;
-            for (std::size_t j = 0; j < this->rank(); ++j) {
-                auto idx = this->rank() - j - 1;
-                if (k == 0) {
-                    index[idx] = 0;
-                    break;
-                } else {
-                    index[idx] = k / strides[idx];
-                    k %= strides[idx];
-                }
-            }
-            new_ptr[i] = old_ptr[this->extents_->index(index)];
+        } else {
+            auto        arr = ndarray<Tp_>(shape);
+            std::size_t idx = 0;
+            detail::reshape_helper(arr.data(), this->data(),
+                                   this->shape().data(), this->strides().data(),
+                                   this->rank(), idx);
+            return arr;
         }
-        return array;
     }
 
     constexpr auto flatten() const {
-        return reshape({size()});
+        std::vector<std::size_t> shape = {size()};
+        return reshape(shape);
     }
 
     constexpr auto transpose(const std::vector<std::size_t>& axes) const {
