@@ -39,11 +39,12 @@ template<class Tp1_,
          class Fn_,
          class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
     requires(std::invocable<Fn_, Tp1_, Tp2_>)
-constexpr void broadcast_apply_contiguous(const Tp1_* const data1,
-                                          const Tp2_* const data2,
-                                          Tp3_* const       data3,
-                                          Fn_&&             func,
-                                          std::size_t       size) {
+inline void broadcast_apply_contiguous(const Tp1_* const data1,
+                                       const Tp2_* const data2,
+                                       Tp3_* const       data3,
+                                       Fn_&&             func,
+                                       std::size_t       size) {
+#pragma omp simd
     for (std::size_t i = 0; i < size; ++i)
         data3[i] = func(data1[i], data2[i]);
 }
@@ -53,34 +54,37 @@ template<class Tp1_,
          class Fn_,
          class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
     requires(std::invocable<Fn_, Tp1_, Tp2_>)
-constexpr void broadcast_apply_general(const Tp1_* const  data1,
-                                       const Tp2_* const  data2,
-                                       Tp3_*              data3,
-                                       Fn_&&              func,
-                                       const std::size_t* shape,
-                                       const std::size_t* strides1,
-                                       const std::size_t* strides2,
-                                       std::size_t        n_rank,
-                                       std::size_t&       idx,
-                                       std::size_t        idx1 = 0,
-                                       std::size_t        idx2 = 0) {
-    if (n_rank == 0) {
-        data3[idx++] = func(data1[idx1], data2[idx2]);
+inline void broadcast_apply_general(const Tp1_* const  data1,
+                                    const Tp2_* const  data2,
+                                    Tp3_*              data3,
+                                    Fn_&&              func,
+                                    const std::size_t* shape,
+                                    const std::size_t* strides1,
+                                    const std::size_t* strides2,
+                                    std::size_t        n_rank,
+                                    std::size_t&       idx,
+                                    std::size_t        idx1 = 0,
+                                    std::size_t        idx2 = 0) {
+    const auto st1  = *strides1;
+    const auto st2  = *strides2;
+    const auto rank = *shape;
+    if (n_rank == 1) {
+#pragma omp simd
+        for (std::size_t i = 0; i < rank; ++i) {
+            data3[idx++] = func(data1[idx1], data2[idx2]);
+            idx1 += st1;
+            idx2 += st2;
+        }
     } else {
-        const auto offset1 = *strides1;
-        const auto offset2 = *strides2;
-        const auto rank    = *shape;
         shape++;
         strides1++;
         strides2++;
         n_rank--;
-        broadcast_apply_general(data1, data2, data3, func, shape, strides1,
-                                strides2, n_rank, idx, idx1, idx2);
-        for (std::size_t i = 1; i < rank; ++i) {
-            idx1 += offset1;
-            idx2 += offset2;
+        for (std::size_t i = 0; i < rank; ++i) {
             broadcast_apply_general(data1, data2, data3, func, shape, strides1,
                                     strides2, n_rank, idx, idx1, idx2);
+            idx1 += st1;
+            idx2 += st2;
         }
     }
 }
@@ -91,11 +95,12 @@ template<bool Sf_,
          class Fn_,
          class Tp3_ = std::invoke_result_t<Fn_, Tp1_, Tp2_>>
     requires(std::invocable<Fn_, Tp1_, Tp2_>)
-constexpr void broadcast_apply_scalar(const Tp1_        scalar,
-                                      const Tp2_* const data1,
-                                      Tp3_*             data2,
-                                      Fn_&&             func,
-                                      std::size_t       size) {
+inline void broadcast_apply_scalar(const Tp1_        scalar,
+                                   const Tp2_* const data1,
+                                   Tp3_*             data2,
+                                   Fn_&&             func,
+                                   std::size_t       size) {
+#pragma omp simd
     for (std::size_t i = 0; i < size; ++i)
         if constexpr (Sf_ == true)
             data2[i] = func(scalar, data1[i]);
@@ -118,7 +123,7 @@ constexpr void broadcast_helper(const ndarray<Tp1_>& arr1,
     std::size_t idx   = 0;
     auto        rank1 = arr1.rank();
     auto        rank2 = arr2.rank();
-    auto [rmax, rmin] = std::minmax(rank1, rank2);
+    auto [rmin, rmax] = std::minmax(rank1, rank2);
 
     auto is_similar   = arr1.is_contiguous() && arr2.is_contiguous();
     auto is_same_size = arr1.size() == arr2.size();
