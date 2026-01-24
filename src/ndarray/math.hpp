@@ -1,5 +1,5 @@
-#ifndef NDARRAY_MATH_H_DEFINED
-#define NDARRAY_MATH_H_DEFINED
+#ifndef MATH_H_DEFINED
+#define MATH_H_DEFINED
 
 #include "core.hpp"
 
@@ -76,9 +76,11 @@ constexpr auto pow(const ndarray<Tp_>& array, Ex_ exp) {
         std::bind(std::pow<Tp_, Ex_>, std::placeholders::_1, exp));
 }
 
-template<class Tp_>
+template<class Tp_,
+         class Rt_
+         = std::conditional_t<std::is_floating_point_v<Tp_>, Tp_, double>>
 constexpr auto sqrt(const ndarray<Tp_>& array) {
-    return array.apply(std::sqrt<Tp_>);
+    return array.apply(static_cast<Rt_ (*)(Tp_)>(std::sqrt));
 }
 
 template<class Tp_>
@@ -130,4 +132,4 @@ constexpr auto sum(const ndarray<Tp_>& array, std::size_t axis) {
 
 } // namespace ax
 
-#endif /* NDARRAY_MATH_H_DEFINED */
+#endif /* MATH_H_DEFINED */
