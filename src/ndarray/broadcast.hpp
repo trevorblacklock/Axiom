@@ -15,25 +15,6 @@ class ndarray;
 
 namespace detail {
 
-// TODO: FIX THIS!!
-constexpr auto is_similar_strides(const std::vector<std::size_t>& strides1,
-                                  const std::vector<std::size_t>& strides2) {
-    std::size_t i1 = strides1.size() - 1;
-    for (std::size_t i2 = strides2.size() - 1; i2-- > 0;) {
-        auto x1 = strides1[i1];
-        auto x2 = strides2[i2];
-        if (x1 == x2 || x2 == 1)
-            continue;
-        else if (x1 == 1) {
-            i1--;
-            i2++;
-            continue;
-        } else
-            return false;
-    }
-    return true;
-}
-
 template<class Tp1_,
          class Tp2_,
          class Fn_,

@@ -15,6 +15,18 @@ enum class stride_type : int {
 
 namespace detail {
 
+constexpr auto is_strided_same(const std::size_t* strides1,
+                               const std::size_t* strides2,
+                               std::size_t        rank1,
+                               std::size_t        rank2) {
+    auto ptr1 = &strides1[rank1 - 1];
+    auto ptr2 = &strides2[rank2 - 1];
+    for (std::size_t i = 0; i < std::min(rank1, rank2); ++i)
+        if (*(ptr1--) != *(ptr2--))
+            return false;
+    return true;
+}
+
 constexpr auto flat_index(const std::size_t* indices,
                           const std::size_t* strides,
                           const std::size_t  size) noexcept {
