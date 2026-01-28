@@ -138,8 +138,8 @@ inline void strided_walk(Tp1_* const        data1,
     }
 }
 
-constexpr void check_broadcastable(const std::vector<std::size_t>& shape1,
-                                   const std::vector<std::size_t>& shape2) {
+constexpr void is_broadcastable(const std::vector<std::size_t>& shape1,
+                                const std::vector<std::size_t>& shape2) {
     auto rank1 = shape1.size();
     auto rank2 = shape2.size();
     auto rmin  = std::min(rank1, rank2);
@@ -152,7 +152,7 @@ constexpr void check_broadcastable(const std::vector<std::size_t>& shape1,
     }
 }
 
-constexpr auto check_broadcastable_return_shape(
+constexpr auto is_broadcastable_and_return_shape(
     const std::vector<std::size_t>& shape1,
     const std::vector<std::size_t>& shape2) {
     auto rank1        = shape1.size();
@@ -317,7 +317,7 @@ constexpr void broadcast(Tp1_&& arr1, const Tp2_& arr2, Fn_&& func) {
         return;
     }
 
-    detail::check_broadcastable(arr1.shape(), arr2.shape());
+    detail::is_broadcastable(arr1.shape(), arr2.shape());
 
     // Process the shape and strides to remove any dimension and corresponding
     // stride that equals 1. If the corresponding rank is zero it means the
@@ -351,7 +351,7 @@ constexpr auto broadcast(const Tp1_& arr1, const Tp2_& arr2, Fn_&& func) {
         return broadcast(arr2.data()[0], arr1, func);
 
     auto shape3
-        = detail::check_broadcastable_return_shape(arr1.shape(), arr2.shape());
+        = detail::is_broadcastable_and_return_shape(arr1.shape(), arr2.shape());
 
     // Process the shape and strides to remove any dimension and corresponding
     // stride that equals 1. If the corresponding rank is zero it means the
