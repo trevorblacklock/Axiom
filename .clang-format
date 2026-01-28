@@ -51,6 +51,7 @@ IndentGotoLabels: true
 NamespaceIndentation: None
 
 PackConstructorInitializers: CurrentLine
+PenaltyReturnTypeOnItsOwnLine: 10000
 PointerAlignment: Left
 
 ReferenceAlignment: Left
