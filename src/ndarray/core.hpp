@@ -32,11 +32,11 @@ template<class Tp_, std::size_t N_>
 using nested_init_list = typename detail::nested_init_list_impl<Tp_, N_>::type;
 
 template<class T_, std::size_t N_>
-inline void
-data_from_nested_init_list_impl(const nested_init_list<T_, N_>& list,
-                                T_*                             ptr,
-                                const std::vector<std::size_t>& shape,
-                                std::size_t&                    idx) {
+inline void data_from_nested_init_list_impl(
+    const nested_init_list<T_, N_>& list,
+    T_*                             ptr,
+    const std::vector<std::size_t>& shape,
+    std::size_t&                    idx) {
     ax_assert(shape[shape.size() - N_] == list.size(),
               "Cannot represent non-rectangular data as ndarray!");
     for (const auto& x : list)
@@ -47,10 +47,10 @@ data_from_nested_init_list_impl(const nested_init_list<T_, N_>& list,
 }
 
 template<class T_, std::size_t N_>
-inline void
-shape_from_nested_init_list_impl(const nested_init_list<T_, N_>& list,
-                                 std::vector<std::size_t>&       shape,
-                                 std::size_t&                    size) {
+inline void shape_from_nested_init_list_impl(
+    const nested_init_list<T_, N_>& list,
+    std::vector<std::size_t>&       shape,
+    std::size_t&                    size) {
     size *= list.size();
     shape.push_back(list.size());
     if constexpr (N_ >= 2)
@@ -350,7 +350,7 @@ class ndarray {
 
     template<class Tp2_>
     constexpr auto operator+(Tp2_ scalar) {
-        return broadcast_scalar<false>(scalar, *this, std::plus());
+        return broadcast(scalar, *this, std::plus());
     }
 
     template<class Tp2_>
@@ -360,7 +360,7 @@ class ndarray {
 
     template<class Tp2_>
     constexpr auto operator-(Tp2_ scalar) {
-        return broadcast_scalar<false>(scalar, *this, std::minus());
+        return broadcast(scalar, *this, std::minus());
     }
 
     template<class Tp2_>
@@ -370,7 +370,7 @@ class ndarray {
 
     template<class Tp2_>
     constexpr auto operator*(Tp2_ scalar) {
-        return broadcast_scalar<false>(scalar, *this, std::multiplies());
+        return broadcast(scalar, *this, std::multiplies());
     }
 
     template<class Tp2_>
@@ -380,54 +380,54 @@ class ndarray {
 
     template<class Tp2_>
     constexpr auto operator/(Tp2_ scalar) {
-        return broadcast_scalar<false>(scalar, *this, std::divides());
+        return broadcast(scalar, *this, std::divides());
     }
 
     template<class Tp2_>
     constexpr auto& operator+=(const ndarray<Tp2_>& arr) {
-        broadcast_self(*this, arr, std::plus());
+        broadcast(std::move(*this), arr, std::plus());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator+=(Tp2_ scalar) {
-        broadcast_scalar_self(scalar, *this, std::plus());
+        broadcast(scalar, std::move(*this), std::plus());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator-=(const ndarray<Tp2_>& arr) {
-        broadcast_self(*this, arr, std::minus());
+        broadcast(std::move(*this), arr, std::minus());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator-=(Tp2_ scalar) {
-        broadcast_scalar_self(scalar, *this, std::minus());
+        broadcast(scalar, std::move(*this), std::minus());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator*=(const ndarray<Tp2_>& arr) {
-        broadcast_self(*this, arr, std::multiplies());
+        broadcast(std::move(*this), arr, std::multiplies());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator*=(Tp2_ scalar) {
-        broadcast_scalar_self(scalar, *this, std::multiplies());
+        broadcast(scalar, std::move(*this), std::multiplies());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator/=(const ndarray<Tp2_>& arr) {
-        broadcast_self(*this, arr, std::divides());
+        broadcast(std::move(*this), arr, std::divides());
         return *this;
     }
 
     template<class Tp2_>
     constexpr auto& operator/=(Tp2_ scalar) {
-        broadcast_scalar_self(scalar, *this, std::divides());
+        broadcast(scalar, std::move(*this), std::divides());
         return *this;
     }
 
@@ -458,26 +458,6 @@ class ndarray {
           data_(data_ptr) {
     }
 };
-
-template<class Tp1_, class Tp2_>
-constexpr auto operator+(Tp1_ scalar, const ndarray<Tp2_>& arr) {
-    return broadcast_scalar<true>(scalar, arr, std::plus());
-}
-
-template<class Tp1_, class Tp2_>
-constexpr auto operator-(Tp1_ scalar, const ndarray<Tp2_>& arr) {
-    return broadcast_scalar<true>(scalar, arr, std::minus());
-}
-
-template<class Tp1_, class Tp2_>
-constexpr auto operator*(Tp1_ scalar, const ndarray<Tp2_>& arr) {
-    return broadcast_scalar<true>(scalar, arr, std::multiplies());
-}
-
-template<class Tp1_, class Tp2_>
-constexpr auto operator/(Tp1_ scalar, const ndarray<Tp2_>& arr) {
-    return broadcast_scalar<true>(scalar, arr, std::divides());
-}
 
 } // namespace ax
 
